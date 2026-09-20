@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}{{ current.name }} · Tiny Links{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-title">Directory</div>
+      <button class="tree-toggle" onclick="toggleAll()" title="Expand/collapse all">⇅</button>
+    </div>
+
+    <div class="tree">
+      {% macro render_tree(folder, depth=0) %}
+        {% set children = tree_children(folder.id) %}
+        {% set folder_links = tree_links(folder.id) %}
+        {% set has_items = children|length > 0 or folder_links|length > 0 %}
+        <div class="tree-node">
+          <div class="tree-folder-line">
+            {% if has_items %}
+              <button class="collapse-button" onclick="toggleNode(this)" aria-label="Expand or collapse">▾</button>
+            {% else %}
+              <span class="collapse-spacer"></span>
+            {% endif %}
+            <a class="tree-link {% if folder.id == current.id %}active{% endif %}"
+               style="--depth: {{ depth }}"
+               href="{{ url_for('folder', folder_id=folder.id) }}">
+              <span class="folder-icon">▸</span>{{ folder.name }}
+            </a>
+          </div>
+
+          {% if has_items %}
+          <div class="tree-children">
+            {% for link in folder_links %}
+              <div class="tree-link-line" style="--depth: {{ depth + 1 }}">
+                <a class="tree-item tree-link-url"
+                   href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                   title="{{ link.url }}">
+                  <span class="link-icon">↳</span>{{ link.name }}
+                </a>
+              </div>
+            {% endfor %}
+
+            {% for child in children %}
+              {{ render_tree(child, depth + 1) }}
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      {% endmacro %}
+
+      {% for root in all_folders %}
+        {{ render_tree(root) }}
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="content">
+    <nav class="crumbs">
+      {% for crumb in breadcrumbs %}
+        <a href="{{ url_for('folder', folder_id=crumb.id) }}">{{ crumb.name }}</a>
+        {% if not loop.last %}<span>/</span>{% endif %}
+      {% endfor %}
+    </nav>
+
+    <section class="top">
+      <h1>{{ current.name }}</h1>
+      {% if current.parent_id %}
+      <form class="inline" method="post" action="{{ url_for('rename_folder', folder_id=current.id) }}">
+        <input name="name" value="{{ current.name }}">
+        <button>Rename</button>
+      </form>
+      <form class="inline" method="post" action="{{ url_for('delete_folder', folder_id=current.id) }}"
+            onsubmit="return confirm('Delete this folder and everything inside it?')">
+        <button class="danger">Delete folder</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Folders</h2>
+        {% for f in children %}
+          <div class="row folder-row">
+            <a href="{{ url_for('folder', folder_id=f.id) }}">📁 {{ f.name }}</a>
+          </div>
+        {% else %}
+          <p class="muted">No subfolders.</p>
+        {% endfor %}
+        <form class="add" method="post" action="{{ url_for('add_folder') }}">
+          <input type="hidden" name="parent_id" value="{{ current.id }}">
+          <input name="name" placeholder="New folder">
+          <button>Add</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Links</h2>
+        {% for link in links %}
+          <div class="row link-row">
+            <a class="main-link" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.name }}</a>
+            <details>
+              <summary>edit</summary>
+              <form method="post" action="{{ url_for('edit_link', link_id=link.id) }}">
+                <input name="name" value="{{ link.name }}">
+                <input name="url" value="{{ link.url }}">
+                <button>Save</button>
+              </form>
+              <form method="post" action="{{ url_for('delete_link', link_id=link.id) }}"
+                    onsubmit="return confirm('Delete this link?')">
+                <button class="danger">Delete</button>
+              </form>
+            </details>
+          </div>
+        {% else %}
+          <p class="muted">No links.</p>
+        {% endfor %}
+        <form class="add link-add" method="post" action="{{ url_for('add_link') }}">
+          <input type="hidden" name="folder_id" value="{{ current.id }}">
+          <input name="name" placeholder="Link name" required>
+          <input name="url" placeholder="https://example.com" type="url" required>
+          <button>Add link</button>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+function toggleNode(button) {
+  const node = button.closest('.tree-node');
+  const children = node.querySelector(':scope > .tree-children');
+  if (!children) return;
+  const collapsed = children.classList.toggle('collapsed');
+  button.textContent = collapsed ? '▸' : '▾';
+}
+
+function toggleAll() {
+  const nodes = document.querySelectorAll('.tree-node');
+  const anyOpen = [...nodes].some(n => {
+    const c = n.querySelector(':scope > .tree-children');
+    return c && !c.classList.contains('collapsed');
+  });
+  nodes.forEach(n => {
+    const c = n.querySelector(':scope > .tree-children');
+    const b = n.querySelector(':scope > .tree-folder-line .collapse-button');
+    if (c && b) {
+      c.classList.toggle('collapsed', anyOpen);
+      b.textContent = anyOpen ? '▸' : '▾';
+    }
+  });
+}
+</script>
+{% endblock %}
